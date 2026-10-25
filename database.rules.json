@@ -1,0 +1,10 @@
+{
+  "rules": {
+    "matches": {
+      "$code": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}

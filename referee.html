@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Referee</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+</head>
+<body class="page referee">
+  <form id="setup" class="narrow card" hidden>
+    <h2 id="setup-title">New match</h2>
+    <label>Blue (Chung) player name <input name="blue" placeholder="Blue"></label>
+    <label>Red (Hong) player name <input name="red" placeholder="Red"></label>
+    <label>Number of judges
+      <select name="judges">
+        <option value="1">1 judge</option>
+        <option value="2">2 judges (both must agree)</option>
+        <option value="3" selected>3 judges (2 must agree)</option>
+      </select>
+    </label>
+    <button class="btn big primary">Create match</button>
+    <button type="button" class="btn" id="setup-cancel" hidden>Cancel</button>
+  </form>
+
+  <main id="panel" class="narrow" hidden>
+    <header class="mini">
+      <div class="b"><span data-f="blue-name"></span> <b data-f="blue-score"></b></div>
+      <div class="c"><span data-f="round"></span><b data-f="clock"></b><span data-f="status"></span></div>
+      <div class="r"><b data-f="red-score"></b> <span data-f="red-name"></span></div>
+    </header>
+
+    <div id="live">
+      <button class="btn big primary" id="startstop"></button>
+      <div class="controls">
+        <div class="col blue">
+          <div class="row"><button class="btn" data-adj="blue" data-d="1">+1</button><button class="btn" data-adj="blue" data-d="-1">−1</button></div>
+          <div class="penrow">Gam-jeom <b data-f="blue-pen"></b></div>
+          <div class="row"><button class="btn" data-pen="blue" data-d="1">+ Penalty</button><button class="btn" data-pen="blue" data-d="-1">− Penalty</button></div>
+        </div>
+        <div class="col red">
+          <div class="row"><button class="btn" data-adj="red" data-d="1">+1</button><button class="btn" data-adj="red" data-d="-1">−1</button></div>
+          <div class="penrow">Gam-jeom <b data-f="red-pen"></b></div>
+          <div class="row"><button class="btn" data-pen="red" data-d="1">+ Penalty</button><button class="btn" data-pen="red" data-d="-1">− Penalty</button></div>
+        </div>
+      </div>
+      <button class="btn danger" id="stop">Stop match and choose winner</button>
+      <div id="choose" class="card" hidden>
+        <p>Who wins?</p>
+        <div class="row">
+          <button class="btn blue-bg" data-win="blue">Blue wins</button>
+          <button class="btn red-bg" data-win="red">Red wins</button>
+        </div>
+        <button class="btn" id="choose-cancel">Cancel</button>
+      </div>
+    </div>
+
+    <div id="over" class="card" hidden>
+      <h2 data-f="winner"></h2>
+      <p data-f="reason"></p>
+      <button class="btn big primary" id="next">Next match</button>
+      <button class="btn" id="reopen">Undo: continue this match</button>
+    </div>
+
+    <details class="card" id="connect">
+      <summary>Connect screens and judges · Code <b data-f="code"></b></summary>
+      <p>Scan these codes with each device.</p>
+      <div class="qrs" id="qrs"></div>
+    </details>
+    <a class="btn" href="index.html">Start page</a>
+  </main>
+
+  <script type="module">
+    import { follow, keepAwake, act, drawQr, pageUrl, code, $ } from './js/ui.js';
+    import { create, change } from './js/store.js';
+    import { newMatch, start, pause, adjust, penalty, stopMatch, reopen } from './js/match.js';
+
+    const form = $('#setup');
+    let current = null;
+    let qrJudges = 0;
+
+    function readForm() {
+      const f = new FormData(form);
+      return { blueName: f.get('blue').trim(), redName: f.get('red').trim(), judges: Number(f.get('judges')) };
+    }
+
+    function randomCode() {
+      const letters = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+      return Array.from({ length: 4 }, () => letters[Math.floor(Math.random() * letters.length)]).join('');
+    }
+
+    form.onsubmit = async e => {
+      e.preventDefault();
+      if (code) {
+        await change(code, () => newMatch(readForm()));
+        form.hidden = true;
+        $('#panel').hidden = false;
+        return;
+      }
+      let m;
+      do m = randomCode(); while (!(await create(m, newMatch(readForm()))));
+      location.href = pageUrl('referee.html', { m });
+    };
+
+    if (!code) {
+      form.hidden = false;
+    } else {
+      localStorage.setItem('tkd-last-match', code);
+      $('#panel').hidden = false;
+      keepAwake();
+
+      $('#startstop').onclick = () => act(current.phase === 'running' ? pause : start);
+      for (const b of document.querySelectorAll('[data-adj]')) b.onclick = () => act(adjust, b.dataset.adj, Number(b.dataset.d));
+      for (const b of document.querySelectorAll('[data-pen]')) b.onclick = () => act(penalty, b.dataset.pen, Number(b.dataset.d));
+      $('#stop').onclick = () => { $('#choose').hidden = false; act(pause); };
+      $('#choose-cancel').onclick = () => { $('#choose').hidden = true; };
+      for (const b of document.querySelectorAll('[data-win]')) b.onclick = () => { $('#choose').hidden = true; act(stopMatch, b.dataset.win); };
+      $('#reopen').onclick = () => act(reopen);
+      $('#next').onclick = () => {
+        form.reset();
+        form.judges.value = current.judges;
+        $('#setup-title').textContent = 'Next match';
+        $('#setup-cancel').hidden = false;
+        form.hidden = false;
+        $('#panel').hidden = true;
+      };
+      $('#setup-cancel').onclick = () => { form.hidden = true; $('#panel').hidden = false; };
+
+      follow(m => {
+        current = m;
+        const finished = m.phase === 'finished';
+        $('#live').hidden = finished;
+        $('#over').hidden = !finished;
+        const sb = $('#startstop');
+        sb.textContent = m.phase === 'running' ? 'Pause' : m.phase === 'rest' ? 'Rest…' : 'Start';
+        sb.disabled = m.phase === 'rest';
+
+        if (qrJudges !== m.judges) {
+          qrJudges = m.judges;
+          const items = [['Big screen', pageUrl('board.html', { m: code })]];
+          for (let j = 1; j <= m.judges; j++) items.push([`Judge ${j}`, pageUrl('judge.html', { m: code, j })]);
+          items.push(['Watch on phone', pageUrl('board.html', { m: code, viewer: 1 })]);
+          $('#qrs').innerHTML = '';
+          for (const [label, url] of items) {
+            const fig = document.createElement('figure');
+            fig.innerHTML = `<div class="qr"></div><figcaption><a href="${url}" target="_blank">${label}</a></figcaption>`;
+            drawQr(fig.querySelector('.qr'), url);
+            $('#qrs').append(fig);
+          }
+        }
+      }, { advanceClock: true });
+    }
+  </script>
+</body>
+</html>

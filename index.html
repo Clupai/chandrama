@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Taekwondo Scoreboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page">
+  <main class="narrow">
+    <h1>Taekwondo Scoreboard</h1>
+    <p id="demo" class="note" hidden>
+      <b>Demo mode.</b> Screens only connect inside this one browser (try opening
+      several tabs). Follow SETUP.md to connect phones and the TV.
+    </p>
+
+    <section class="card">
+      <h2>Referee</h2>
+      <a class="btn big primary" href="referee.html">Start a new match</a>
+      <a class="btn" id="continue" hidden></a>
+    </section>
+
+    <section class="card">
+      <h2>Join a match</h2>
+      <label>Match code
+        <input id="code" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="ABCD">
+      </label>
+      <div class="row">
+        <button class="btn" data-go="board.html">Big screen</button>
+        <button class="btn" data-go="board.html" data-viewer>Watch</button>
+      </div>
+      <div class="row">
+        <button class="btn" data-go="judge.html" data-judge="1">Judge 1</button>
+        <button class="btn" data-go="judge.html" data-judge="2">Judge 2</button>
+        <button class="btn" data-go="judge.html" data-judge="3">Judge 3</button>
+      </div>
+      <p id="err" class="error"></p>
+    </section>
+  </main>
+  <script type="module">
+    import { DEMO } from './js/store.js';
+    import { pageUrl } from './js/ui.js';
+    document.querySelector('#demo').hidden = !DEMO;
+
+    const last = localStorage.getItem('tkd-last-match');
+    if (last) {
+      const a = document.querySelector('#continue');
+      a.hidden = false;
+      a.textContent = `Continue match ${last}`;
+      a.href = pageUrl('referee.html', { m: last });
+    }
+
+    for (const b of document.querySelectorAll('[data-go]')) {
+      b.onclick = () => {
+        const m = document.querySelector('#code').value.trim().toUpperCase();
+        if (m.length !== 4) return (document.querySelector('#err').textContent = 'Type the 4-letter match code first.');
+        const q = { m };
+        if (b.dataset.judge) q.j = b.dataset.judge;
+        if ('viewer' in b.dataset) q.viewer = 1;
+        location.href = pageUrl(b.dataset.go, q);
+      };
+    }
+  </script>
+</body>
+</html>

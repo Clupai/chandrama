@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scoreboard</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+</head>
+<body class="board">
+  <main class="sb">
+    <section class="side blue">
+      <div class="corner">CHUNG</div>
+      <div class="name" data-f="blue-name"></div>
+      <div class="score" data-f="blue-score"></div>
+      <div class="pen">GAM-JEOM <b data-f="blue-pen"></b></div>
+      <div class="flash" id="flash-blue"></div>
+    </section>
+    <section class="mid">
+      <div class="round" data-f="round"></div>
+      <div class="clock" data-f="clock"></div>
+      <div class="status" data-f="status"></div>
+      <div class="join" id="join">
+        <div class="qr" id="qr"></div>
+        <div>Scan to watch · Code <b data-f="code"></b></div>
+      </div>
+    </section>
+    <section class="side red">
+      <div class="corner">HONG</div>
+      <div class="name" data-f="red-name"></div>
+      <div class="score" data-f="red-score"></div>
+      <div class="pen">GAM-JEOM <b data-f="red-pen"></b></div>
+      <div class="flash" id="flash-red"></div>
+    </section>
+  </main>
+  <div class="result"><div class="winner" data-f="winner"></div><div data-f="reason"></div></div>
+  <div class="overlay" id="tap" hidden><div><h2>Tap to start the big screen</h2><p>This turns on full screen and sound.</p></div></div>
+
+  <script type="module">
+    import { follow, keepAwake, drawQr, pageUrl, params, code, $ } from './js/ui.js';
+
+    const viewer = params.has('viewer');
+    let audio = null;
+    let lastFlash = null;
+    let lastPhase = null;
+
+    if (viewer) $('#join').remove();
+    else {
+      drawQr($('#qr'), pageUrl('board.html', { m: code, viewer: 1 }));
+      $('#tap').hidden = false;
+      $('#tap').onclick = () => {
+        $('#tap').hidden = true;
+        audio = new AudioContext();
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      };
+    }
+    keepAwake();
+
+    function beep(seconds) {
+      if (!audio) return;
+      const osc = audio.createOscillator();
+      osc.frequency.value = 660;
+      osc.connect(audio.destination);
+      osc.start();
+      osc.stop(audio.currentTime + seconds);
+    }
+
+    follow(m => {
+      // Show "+3 Head kick" on the side that just scored.
+      if (lastFlash !== null && m.last.at !== lastFlash && m.last.color) {
+        const el = $('#flash-' + m.last.color);
+        el.textContent = `+${m.last.points} ${m.last.label}`;
+        el.classList.remove('show');
+        void el.offsetWidth;
+        el.classList.add('show');
+      }
+      lastFlash = m.last.at;
+
+      if (lastPhase === 'running' && (m.phase === 'rest' || m.phase === 'finished')) beep(1.2);
+      if (lastPhase === 'rest' && m.phase === 'ready') beep(0.3);
+      lastPhase = m.phase;
+    }, { advanceClock: !viewer });
+  </script>
+</body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Judge</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="judge">
+  <header class="mini">
+    <div class="b"><span data-f="blue-name"></span> <b data-f="blue-score"></b></div>
+    <div class="c"><span data-f="round"></span><b data-f="clock"></b></div>
+    <div class="r"><b data-f="red-score"></b> <span data-f="red-name"></span></div>
+  </header>
+  <p class="who">Judge <b id="num"></b> · Match <b data-f="code"></b></p>
+  <p class="wait" id="wait"></p>
+  <main class="pads">
+    <div class="pad blue" id="pad-blue"></div>
+    <div class="pad red" id="pad-red"></div>
+  </main>
+  <script type="module">
+    import { follow, keepAwake, act, params, $ } from './js/ui.js';
+    import { judgePress, TECHNIQUES, COLORS } from './js/match.js';
+
+    const judge = Number(params.get('j')) || 1;
+    $('#num').textContent = judge;
+    keepAwake();
+
+    for (const color of COLORS) {
+      for (const t of TECHNIQUES) {
+        const b = document.createElement('button');
+        b.innerHTML = `<b>${t.points}</b><span>${t.label}</span>`;
+        b.onclick = () => {
+          navigator.vibrate?.(40);
+          b.classList.remove('sent');
+          void b.offsetWidth;
+          b.classList.add('sent');
+          act(judgePress, judge, color, t.id);
+        };
+        $('#pad-' + color).append(b);
+      }
+    }
+
+    follow(m => {
+      let msg = '';
+      if (judge > m.judges) msg = `This match uses ${m.judges} judge${m.judges > 1 ? 's' : ''}, so Judge ${judge} is not needed.`;
+      else if (m.phase === 'finished') msg = 'Match over.';
+      else if (m.phase !== 'running') msg = 'Waiting for the referee to start the clock.';
+      $('#wait').textContent = msg;
+      for (const b of document.querySelectorAll('.pad button')) b.disabled = !!msg;
+    });
+  </script>
+</body>
+</html>
